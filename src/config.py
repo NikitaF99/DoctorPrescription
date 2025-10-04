@@ -1,0 +1,3 @@
+BATCH_SIZE = 32
+EPOCHS = 1
+MODEL_PATH = './temp.pth'
