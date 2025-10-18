@@ -4,10 +4,11 @@ from utility import ctc_decode, levenshtein_distance
 from model import CRNN
 import rapidfuzz.distance.Levenshtein as Levenshtein
 from torch.utils.data import  DataLoader
-from config import BATCH_SIZE
+from config import *
 from main import create_dataset
 import pandas as pd
-from main import preprocess
+from data_utility import preprocess_data, create_dataset, create_dataloaders
+import matplotlib.pyplot as plt
 
 def load_data_params():
     df_train = pd.read_csv('../dataset/Training/training_labels.csv')
@@ -15,7 +16,7 @@ def load_data_params():
     df_val = pd.read_csv('../dataset/Validation/validation_labels.csv')
 
     
-    df_train, df_test, df_val = preprocess(df_train, df_test, df_val)
+    df_train, df_test, df_val = preprocess_data(df_train, df_test, df_val)
 
     all_labels = pd.concat([df_train['processed_label'], df_test['processed_label'], df_val['processed_label']])
     all_chars = sorted(list(set(''.join(all_labels.astype(str).tolist()))))
@@ -24,17 +25,23 @@ def load_data_params():
     int_to_char = {i: char for i, char in enumerate(all_chars)}
     max_label_length = max(all_labels.astype(str).apply(len))
     num_classes = len(char_to_int) + 1
-
+ 
     lexicon = set()
     lexicon.update(df_train['processed_label'])
     lexicon.update(df_test['processed_label'])
     lexicon.update(df_val['processed_label'])
 
+    INT_TO_CHAR = int_to_char
+    NUM_OF_CLASSES = num_classes
+    CHAR_TO_INT = char_to_int
+    LEXICON = lexicon
+   
+
     return char_to_int, int_to_char, max_label_length, num_classes, df_test, lexicon
 
 def evaluation(test_dataloader, num_classes, device, int_to_char, char_to_int, lexicon):
     model = CRNN(num_classes=num_classes).to(device)   # initialize same architecture as before
-    model.load_state_dict(torch.load("./crnn_model1.pth", map_location=torch.device('cpu')))
+    model.load_state_dict(torch.load("./crnn_model4.pth", map_location=torch.device('cpu')))
     model.eval()
     test_decoded_predictions = []
     test_true_labels = []
@@ -93,6 +100,19 @@ def evaluation(test_dataloader, num_classes, device, int_to_char, char_to_int, l
 
     print(f"\nWord Error Rate (WER) on Test Set: {wer:.4f}")
 
+    metrics = ['WER', 'CER']
+    values = [wer, cer]
+
+    visualize(metrics, values)
+
+def visualize(metrics, values):
+
+    plt.figure(figsize=(6, 4))
+    plt.bar(metrics, values, color=['blue', 'red'])
+    plt.ylabel('Error Rate')
+    plt.title('Word Error Rate (WER) and Character Error Rate (CER)')
+    plt.ylim(0, 1) # Error rates are typically between 0 and 1
+    plt.show()
 
 def main():
     char_to_int, int_to_char, max_label_length, num_classes, df_test, lexicon = load_data_params()

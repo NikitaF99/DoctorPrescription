@@ -1,3 +1,7 @@
 BATCH_SIZE = 32
-EPOCHS = 1
-MODEL_PATH = './temp.pth'
+EPOCHS = 50
+MODEL_PATH = './crnn_model5.pth'
+INT_TO_CHAR = None
+NUM_OF_CLASSES = None
+CHAR_TO_INT = None
+LEXICON = None
