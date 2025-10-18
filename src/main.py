@@ -1,82 +1,14 @@
 import pandas as pd
 import torch
 import cv2
-from preprocess import apply_preprocessing_to_row, create_ctc_labels, image_to_tensor
 from utility import get_device
 from config import *
 from dataset import PrescriptionDataset
+from data_utility import preprocess_data, create_dataset, create_dataloaders
 from model import CRNN, EarlyStopping
 from torch.utils.data import Dataset, DataLoader
 import torch.nn as nn
 
-def create_dataloaders(dataset, batch_size, shuffle = False):
-    return DataLoader(dataset, batch_size, shuffle)
-
-def create_dataset(dataframe, char_to_int,max_label_length):
-    return PrescriptionDataset(dataframe, char_to_int=char_to_int, max_label_length=max_label_length)
-
-def preprocess(df_train, df_test,df_val):
-    print("Preprocessing training data...")
-
-    # processed_train_results_list = [apply_preprocessing_to_row(row, '/content/dataset/Training/training_words') for index, row in df_train.iterrows()]
-    processed_train_results_list = []
-    for index, row in df_train.iterrows():
-        result = apply_preprocessing_to_row(row, '../dataset/Training/training_words')
-        processed_train_results_list.append(result)
-
-
-    processed_train_df = pd.DataFrame(processed_train_results_list, index=df_train.index, columns=['preprocessed_image', 'processed_label'])
-    df_train['preprocessed_image'] = processed_train_df['preprocessed_image']
-    df_train['processed_label'] = processed_train_df['processed_label']
-    labels = set()
-    labels.update(df_train['processed_label'])
-    print(labels)
-
-    print("Preprocessing testing data...")
-    processed_test_results_list = [apply_preprocessing_to_row(row, '../dataset/Testing/testing_words') for index, row in df_test.iterrows()]
-    processed_test_df = pd.DataFrame(processed_test_results_list, index=df_test.index, columns=['preprocessed_image', 'processed_label'])
-    df_test['preprocessed_image'] = processed_test_df['preprocessed_image']
-    df_test['processed_label'] = processed_test_df['processed_label']
-
-    print("Preprocessing validation data...")
-    processed_val_results_list = [apply_preprocessing_to_row(row, '../dataset/Validation/validation_words') for index, row in df_val.iterrows()]
-    processed_val_df = pd.DataFrame(processed_val_results_list, index=df_val.index, columns=['preprocessed_image', 'processed_label'])
-    df_val['preprocessed_image'] = processed_val_df['preprocessed_image']
-    df_val['processed_label'] = processed_val_df['processed_label']
-
-
-    # Create a character to integer mapping and vice versa
-    # Get all unique characters from the labels
-    all_labels = pd.concat([df_train['processed_label'], df_test['processed_label'], df_val['processed_label']])
-    all_chars = sorted(list(set(''.join(all_labels.astype(str).tolist()))))
-
-    char_to_int = {char: i for i, char in enumerate(all_chars)}
-    int_to_char = {i: char for i, char in enumerate(all_chars)}
-
-    print('In func')
-    print(char_to_int)
-
-    max_label_length = max(all_labels.astype(str).apply(len))
-
-    df_train['preprocessed_image_crnn'] = df_train['preprocessed_image'].apply(lambda x: image_to_tensor(x))
-    df_train['ctc_label'] = df_train['processed_label'].apply(lambda x: create_ctc_labels(x, char_to_int, max_label_length))
-
-    df_val['preprocessed_image_crnn'] = df_val['preprocessed_image'].apply(lambda x: image_to_tensor(x))
-    df_val['ctc_label'] = df_val['processed_label'].apply(lambda x: create_ctc_labels(x, char_to_int, max_label_length))
-
-    df_test['preprocessed_image_crnn'] = df_test['preprocessed_image'].apply(lambda x: image_to_tensor(x))
-    df_test['ctc_label'] = df_test['processed_label'].apply(lambda x: create_ctc_labels(x, char_to_int, max_label_length))
-
-    print("Training DataFrame with CRNN preprocessed images and CTC labels:")
-    print(df_train.head())
-
-    print("\nValidation DataFrame with CRNN preprocessed images and CTC labels:")
-    print(df_val.head())
-
-    print("\nTesting DataFrame with CRNN preprocessed images and CTC labels:")
-    print(df_test.head())
-
-    return df_train, df_test, df_val
 
 def main():
     # Device
@@ -87,14 +19,13 @@ def main():
     df_val = pd.read_csv('../dataset/Validation/validation_labels.csv')
 
     
-    df_train, df_test, df_val = preprocess(df_train, df_test, df_val)
+    df_train, df_test, df_val = preprocess_data(df_train, df_test, df_val)
 
     all_labels = pd.concat([df_train['processed_label'], df_test['processed_label'], df_val['processed_label']])
     all_chars = sorted(list(set(''.join(all_labels.astype(str).tolist()))))
-
     char_to_int = {char: i for i, char in enumerate(all_chars)}
     int_to_char = {i: char for i, char in enumerate(all_chars)}
-
+    INT_TO_CHAR = int_to_char
     max_label_length = max(all_labels.astype(str).apply(len))
 
     train_dataset = create_dataset(df_train, char_to_int=char_to_int, max_label_length=max_label_length)
@@ -115,10 +46,10 @@ def main():
     model = CRNN(num_classes=num_classes).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     criterion = nn.CTCLoss(blank=len(char_to_int)) # Use the size of the character set as the blank index
-    early_stopping = EarlyStopping(patience=3, delta=0.01)
+    early_stopping = EarlyStopping(patience=5, delta=0.01)
 
     # Implement the training loop
-    num_epochs = EPOCHS # You can adjust the number of epochs
+    num_epochs = EPOCHS 
 
     for epoch in range(num_epochs):
         model.train()
