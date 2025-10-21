@@ -3,6 +3,33 @@ import torch.nn.functional as F
 import torch
 
 # Redefine the CRNN model with adjusted CNN layers
+class SpatialAttention(nn.Module):
+    def __init__(self, kernel_size=7):
+        super(SpatialAttention, self).__init__()
+        print('Spatial Attentio used')
+
+        assert kernel_size in (3, 7), 'kernel size must be 3 or 7'
+        padding = 3 if kernel_size == 7 else 1
+
+        self.conv1 = nn.Conv2d(2, 1, kernel_size, padding=padding, bias=False)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        # x shape: (batch_size, channels, height, width)
+        # Apply global average and max pooling across the channel dimension
+        avg_out = torch.mean(x, dim=1, keepdim=True)
+        max_out, _ = torch.max(x, dim=1, keepdim=True)
+
+        # Concatenate average and max pooled features
+        x_concat = torch.cat([avg_out, max_out], dim=1) # shape: (batch_size, 2, height, width)
+
+        # Apply a convolutional layer to generate the attention map
+        attention_map = self.sigmoid(self.conv1(x_concat)) # shape: (batch_size, 1, height, width)
+
+        # Apply the attention map to the input feature map
+        return x * attention_map # shape: (batch_size, channels, height, width)
+    
+
 class CRNN(nn.Module):
     def __init__(self, num_classes):
         super(CRNN, self).__init__()
@@ -35,6 +62,9 @@ class CRNN(nn.Module):
             nn.Conv2d(512, 512, kernel_size=(1, 2), stride=1, padding=0), # Output size: (batch, 512, 1, 63)
             nn.ReLU(inplace=True),
         )
+
+         # Spatial Attention layer
+        self.spatial_attention = SpatialAttention(kernel_size=7)
 
         # RNN layers (Bidirectional LSTM)
         # Input size to RNN will be 512 (channels)
@@ -78,8 +108,6 @@ class EarlyStopping:
 
     def __call__(self, val_loss, model):
         score = -val_loss
-        print("Early stopping call")
-
         if self.best_score is None:
             self.best_score = score
             self.best_model_state = model.state_dict()
