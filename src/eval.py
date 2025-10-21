@@ -9,6 +9,7 @@ from main import create_dataset
 import pandas as pd
 from data_utility import preprocess_data, create_dataset, create_dataloaders
 import matplotlib.pyplot as plt
+import json
 
 def load_data_params():
     df_train = pd.read_csv('../dataset/Training/training_labels.csv')
@@ -30,13 +31,18 @@ def load_data_params():
     lexicon.update(df_train['processed_label'])
     lexicon.update(df_test['processed_label'])
     lexicon.update(df_val['processed_label'])
+    lexicon = sorted(lexicon)
 
-    INT_TO_CHAR = int_to_char
-    NUM_OF_CLASSES = num_classes
-    CHAR_TO_INT = char_to_int
-    LEXICON = lexicon
+    data = {"INT_TO_CHAR": int_to_char,
+            "NUM_OF_CLASSES": num_classes,
+            "LEXICON": list(lexicon),
+            "CHAR_TO_INT": char_to_int,
+            "MAX_LABEL_LENGTH": max_label_length}
+    
+    with open("parameters.json", "w") as f:
+        json.dump(data, f, indent=4)
+
    
-
     return char_to_int, int_to_char, max_label_length, num_classes, df_test, lexicon
 
 def evaluation(test_dataloader, num_classes, device, int_to_char, char_to_int, lexicon):
@@ -119,7 +125,7 @@ def main():
     dataset = create_dataset(df_test, char_to_int=char_to_int, max_label_length=max_label_length)
     dataloader =  DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False)
 
-    evaluation(dataloader, num_classes, 'cpu', int_to_char, char_to_int, lexicon)
+    evaluation(dataloader, num_classes, 'cpu', int_to_char, char_to_int)
 
 
 if __name__ == "__main__":
